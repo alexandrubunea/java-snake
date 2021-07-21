@@ -14,18 +14,18 @@ public class Panel extends JPanel implements Runnable {
     private static final int UNIT_SIZE = 25;
 
     // snake-props
-    ArrayList<Snake> snake = new ArrayList<>();
+    ArrayList<Snake> snake;
     char direction;
 
     // fruit-props
     Fruit fruit;
 
     // game-props
+    Thread gameThread;
     private final Random random = new Random();
-    private final Thread gameThread = new Thread(this);
     private boolean gameOver = false;
     private int score;
-    private boolean AI = false;
+    private boolean AI = true;
 
     // constructor
     Panel() {
@@ -35,11 +35,13 @@ public class Panel extends JPanel implements Runnable {
 
         initGame();
         this.addKeyListener(new MyKeyAdapter());
+        gameThread = new Thread(this);
         gameThread.start();
     }
 
     // game
     private void initGame() {
+        snake = new ArrayList<>();
         int sX, sY, fX, fY, d;
         sX = random.nextInt(SCREEN_WIDTH / UNIT_SIZE) * UNIT_SIZE;
         sY = random.nextInt(SCREEN_HEIGHT / UNIT_SIZE) * UNIT_SIZE;
@@ -99,8 +101,29 @@ public class Panel extends JPanel implements Runnable {
             g.drawString("SCORE: " + score, 10, 25);
         }
     }
+    private void renderInfo(Graphics g) {
+        g.setColor(Color.BLUE);
+        g.setFont(new Font("Arial", Font.BOLD, 40));
+        g.drawString("SNAKE", SCREEN_WIDTH / 2 - 70, SCREEN_HEIGHT / 2 - 110);
+
+        g.setColor(Color.YELLOW);
+        g.setFont(new Font("Arial", Font.BOLD, 16));
+        g.drawString("PRESS ENTER TO START", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 80);
+    }
+    private void renderGameOver(Graphics g) {
+        g.setColor(Color.RED);
+        g.setFont(new Font("Arial", Font.BOLD, 40));
+        g.drawString("GAME OVER", SCREEN_WIDTH / 2 - 110, SCREEN_HEIGHT / 2 - 110);
+        g.setFont(new Font("Arial", Font.BOLD, 16));
+        g.drawString("SCORE: " + score, SCREEN_WIDTH / 2 - 30, SCREEN_HEIGHT / 2 - 80);
+        g.setColor(Color.BLUE);
+        g.drawString("PRESS SPACE TO RESTART", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 50);
+    }
     private void draw(Graphics g) {
         if(!gameOver) {
+            // render-start-text
+            if(AI) renderInfo(g);
+
             // score-render
             scoreRender(g);
 
@@ -110,15 +133,7 @@ public class Panel extends JPanel implements Runnable {
             // render-snake
             snake.forEach(s -> s.render(g));
 
-        } else {
-            g.setColor(Color.RED);
-            g.setFont(new Font("Arial", Font.BOLD, 40));
-            g.drawString("GAME OVER", SCREEN_WIDTH / 2 - 110, SCREEN_HEIGHT / 2 - 110);
-            g.setFont(new Font("Arial", Font.BOLD, 16));
-            g.drawString("SCORE: " + score, SCREEN_WIDTH / 2 - 30, SCREEN_HEIGHT / 2 - 80);
-            g.setColor(Color.BLUE);
-            g.drawString("PRESS SPACE TO RESTART", SCREEN_WIDTH / 2 - 100, SCREEN_HEIGHT / 2 - 50);
-        }
+        } else renderGameOver(g);
     }
 
     // movement
@@ -143,9 +158,107 @@ public class Panel extends JPanel implements Runnable {
             case 'R' -> snake.get(0).setX(snake.get(0).x() + UNIT_SIZE);
         }
     }
+
     // AI
+    private boolean doesNotIntersect(int x, int y) {
+        AtomicBoolean result = new AtomicBoolean(false);
+        snake.subList(1, snake.size() - 1).forEach((s) -> {
+            if(s.x() == x && s.y() == y) result.set(true);
+        });
+        return !result.get();
+    }
+    private int modulo(int x) {
+        if(x < 0) x = -x;
+        return x;
+    }
     private void snakeAI() {
         Snake head = snake.get(0);
+
+        // Not on the same axis with the fruit
+        if(head.y() > fruit.y() && direction != 'U') {
+            if(direction != 'D' && doesNotIntersect(head.x(), head.y() - UNIT_SIZE)) direction = 'U';
+            if(direction == 'D') {
+                int left_distance = modulo(head.x() - UNIT_SIZE - fruit.x());
+                int right_distance = modulo(head.x() + UNIT_SIZE - fruit.x());
+                if(left_distance <= right_distance) {
+                    if(doesNotIntersect(head.x() - UNIT_SIZE, head.y())) direction = 'L';
+                } else {
+                    if(doesNotIntersect(head.x() + UNIT_SIZE, head.y())) direction = 'R';
+                }
+            }
+        } else if(head.y() < fruit.y() && direction != 'D') {
+            if(direction != 'U' && doesNotIntersect(head.x(), head.y() - UNIT_SIZE)) direction = 'D';
+            if(direction == 'U') {
+                int left_distance = modulo(head.x() - UNIT_SIZE - fruit.x());
+                int right_distance = modulo(head.x() + UNIT_SIZE - fruit.x());
+                if(left_distance <= right_distance) {
+                    if(doesNotIntersect(head.x() - UNIT_SIZE, head.y())) direction = 'L';
+                } else {
+                    if(doesNotIntersect(head.x() + UNIT_SIZE, head.y())) direction = 'R';
+                }
+            }
+        }
+
+        if(head.x() > fruit.x() && direction != 'L') {
+            if(direction != 'R' && doesNotIntersect(head.x() - UNIT_SIZE, head.y())) direction = 'L';
+            if(direction == 'R') {
+                int left_distance = modulo(head.y() - UNIT_SIZE - fruit.y());
+                int right_distance = modulo(head.y() + UNIT_SIZE - fruit.y());
+                if(left_distance <= right_distance) {
+                    if(doesNotIntersect(head.x(), head.y() - UNIT_SIZE)) direction = 'U';
+                } else {
+                    if(doesNotIntersect(head.x(), head.y() + UNIT_SIZE)) direction = 'D';
+                }
+            }
+        } else if(head.x() < fruit.x() && direction != 'R') {
+            if(direction != 'L' && doesNotIntersect(head.x() + UNIT_SIZE, head.y())) direction = 'R';
+            if(direction == 'L') {
+                int left_distance = modulo(head.y() - UNIT_SIZE - fruit.y());
+                int right_distance = modulo(head.y() + UNIT_SIZE - fruit.y());
+                if(left_distance <= right_distance) {
+                    if(doesNotIntersect(head.x(), head.y() - UNIT_SIZE)) direction = 'U';
+                } else {
+                    if(doesNotIntersect(head.x(), head.y() + UNIT_SIZE)) direction = 'D';
+                }
+            }
+        }
+
+        // Obstacle ahead
+        switch(direction) {
+            case 'U' -> {
+                if(!doesNotIntersect(head.x(), head.y() - UNIT_SIZE)) {
+                    int left_distance = modulo(head.x() - UNIT_SIZE - fruit.x());
+                    int right_distance = modulo(head.x() + UNIT_SIZE - fruit.x());
+                    if(left_distance <= right_distance) direction = 'L';
+                    else direction = 'R';
+                }
+            }
+            case 'D' -> {
+                if(!doesNotIntersect(head.x(), head.y() + UNIT_SIZE)) {
+                    int left_distance = modulo(head.x() - UNIT_SIZE - fruit.x());
+                    int right_distance = modulo(head.x() + UNIT_SIZE - fruit.x());
+                    if(left_distance <= right_distance) direction = 'L';
+                    else direction = 'R';
+                }
+            }
+            case 'L' -> {
+                if(!doesNotIntersect(head.x() - UNIT_SIZE, head.y())) {
+                    int left_distance = modulo(head.y() - UNIT_SIZE - fruit.y());
+                    int right_distance = modulo(head.y() + UNIT_SIZE - fruit.y());
+                    if(left_distance <= right_distance) direction = 'U';
+                    else direction = 'D';
+                }
+            }
+            case 'R' -> {
+                if(!doesNotIntersect(head.x() + UNIT_SIZE, head.y())) {
+                    int left_distance = modulo(head.y() - UNIT_SIZE - fruit.y());
+                    int right_distance = modulo(head.y() + UNIT_SIZE - fruit.y());
+                    if(left_distance <= right_distance) direction = 'U';
+                    else direction = 'D';
+                }
+            }
+        }
+
     }
 
     // collisions
@@ -161,8 +274,10 @@ public class Panel extends JPanel implements Runnable {
 
         // with-the-fruit
         if(head.x() == fruit.x() && head.y() == fruit.y()) {
-            Snake component = new Snake(snake.get(1).x(), snake.get(1).y(), UNIT_SIZE, UNIT_SIZE, false);
-            snake.add(component);
+            if(!AI || snake.size() < 8) {
+                Snake component = new Snake(snake.get(1).x(), snake.get(1).y(), UNIT_SIZE, UNIT_SIZE, false);
+                snake.add(component);
+            }
             newFruit();
             score += 10;
         }
@@ -172,8 +287,7 @@ public class Panel extends JPanel implements Runnable {
         snake.subList(1, snake.size()).forEach((s) -> {
             if(head.x() == s.x() && head.y() == s.y()) isOver.set(true);
         });
-        if(isOver.get()) {
-            snake = new ArrayList<>();
+        if(isOver.get() && !AI) {
             gameOver = true;
         }
     }
@@ -191,6 +305,12 @@ public class Panel extends JPanel implements Runnable {
                     if(gameOver) {
                         initGame();
                         gameOver = false;
+                    }
+                }
+                case KeyEvent.VK_ENTER -> {
+                    if(AI) {
+                        AI = false;
+                        initGame();
                     }
                 }
             }
@@ -214,6 +334,9 @@ public class Panel extends JPanel implements Runnable {
                 repaint();
 
                 if(!gameOver) {
+                    // snake-ai
+                    if(AI) snakeAI();
+
                     // snake-movement
                     snakeMove();
 
